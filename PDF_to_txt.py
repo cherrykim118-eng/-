@@ -3,18 +3,41 @@ import tempfile
 
 import streamlit as st
 from docx import Document
-from docx2pdf import convert
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 
 
-def docx_to_pdf_simple(docx_path: str, pdf_path: str):
-    # docx → pdf 변환 (Windows/Mac에서만 정상 동작)
-    convert(docx_path, pdf_path)
+def docx_to_pdf_text_only(docx_path: str, pdf_path: str):
+    # DOCX 파일 읽기
+    document = Document(docx_path)
+
+    # PDF 캔버스 생성
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+    width, height = A4
+
+    x = 50
+    y = height - 50
+    line_spacing = 14
+
+    # DOCX 문단을 한 줄씩 PDF에 그리기
+    for para in document.paragraphs:
+        text = para.text
+
+        # 줄바꿈 처리
+        for line in text.split("\n"):
+            if y < 50:  # 페이지 끝나면 새 페이지
+                c.showPage()
+                y = height - 50
+
+            c.drawString(x, y, line)
+            y -= line_spacing
+
+    c.save()
 
 
 def main():
-    st.set_page_config(page_title="DOCX → PDF 변환기", page_icon="📝")
-    st.title("📝 DOCX를 PDF로 변환하기")
-    st.write("워드 파일(DOCX)을 PDF 파일로 변환합니다.")
+    st.set_page_config(page_title="DOCX → PDF (텍스트만)", page_icon="📝")
+    st.title("📝 DOCX → PDF 변환기 (텍스트만)")
 
     uploaded_file = st.file_uploader("DOCX 파일을 업로드하세요", type=["docx"])
 
@@ -23,46 +46,41 @@ def main():
             st.warning("먼저 DOCX 파일을 업로드해주세요.")
             return
 
-        with st.spinner("DOCX를 처리하는 중입니다..."):
-            # 업로드된 DOCX → 임시 파일 저장
+        with st.spinner("DOCX 처리 중..."):
             with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
                 tmp_docx.write(uploaded_file.read())
                 docx_path = tmp_docx.name
 
-            base_name = os.path.splitext(os.path.basename(uploaded_file.name))[0]
-
-            # 변환 후 결과 PDF 파일 저장 경로
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
                 pdf_path = tmp_pdf.name
 
-            try:
-                # DOCX → PDF 변환 실행
-                docx_to_pdf_simple(docx_path, pdf_path)
+            base_name = os.path.splitext(uploaded_file.name)[0]
 
-                # 변환된 PDF 읽어오기
+            try:
+                docx_to_pdf_text_only(docx_path, pdf_path)
+
                 with open(pdf_path, "rb") as f:
                     pdf_data = f.read()
 
-                st.success("변환이 완료되었습니다!")
+                st.success("변환 완료!")
                 st.download_button(
-                    label="PDF 파일 다운로드",
+                    label="PDF 다운로드",
                     data=pdf_data,
                     file_name=f"{base_name}.pdf",
                     mime="application/pdf",
                 )
 
             except Exception as e:
-                st.error(f"변환 중 오류가 발생했습니다: {e}")
+                st.error(f"오류 발생: {e}")
 
             finally:
-                # 임시 파일 삭제
                 try:
                     os.remove(docx_path)
-                except Exception:
+                except:
                     pass
                 try:
                     os.remove(pdf_path)
-                except Exception:
+                except:
                     pass
 
 
